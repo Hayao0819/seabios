@@ -60,6 +60,7 @@ static void *vmx_areas;
 u32 TDXInstallLock __VISIBLE;
 u32 TDXInstallStack __VISIBLE;
 static u32 InstalledCPUs;
+static u32 SeamLegacyRamLimit;
 
 static seam_sigstruct_t *seam_sigstruct;
 static void *tdx_module;
@@ -430,27 +431,38 @@ static void *setup_seam_range(u32 size)
 {
     seamrr_base_t seamrr_base;
     seamrr_mask_t seamrr_mask;
-    u64 n, i, min_size;
+    struct qemu_linux_boot_info boot;
     u64 start = 0;
+    int i;
 
-    if (size % SEAMRR_BLOCK_SIZE) {
-        tdx_dprintf(1, "seam_range_size is not aligned to 32MB\n");
+    if (!size || size % SEAMRR_BLOCK_SIZE)
         return NULL;
-    }
 
-    // Compute minimum size of memory space to allocate `size` of memory
-    // at `SEAMRR_BLOCK_SIZE` aligned address
-    n = size / SEAMRR_BLOCK_SIZE;
-    min_size = (n + 1) * SEAMRR_BLOCK_SIZE;
-
+    qemu_get_linux_boot_info(&boot);
     for (i = 0; i < e820_count; i++) {
         struct e820entry *e = &e820_list[i];
-        if (e->type == E820_RESERVED)
-            continue;
-        if (e->size < min_size)
-            continue;
+        u64 end = e->start + e->size;
+        u64 kernel_end = (u64)boot.kernel_addr + boot.kernel_size;
+        u64 initrd_end = (u64)boot.initrd_addr + boot.initrd_size;
+        u64 candidate, relocated_initrd;
 
-        start = ((e->start + e->size - min_size) + (SEAMRR_BLOCK_SIZE -1)) & ~(SEAMRR_BLOCK_SIZE -1);
+        if (e->type != E820_RAM || end < e->start)
+            continue;
+        if (end > 0x100000000ULL)
+            end = 0x100000000ULL;
+        if (boot.initrd_size && boot.initrd_addr < end && initrd_end > e->start)
+            end = boot.initrd_addr;
+        if (end < size)
+            continue;
+        candidate = (end - size) & ~((u64)SEAMRR_BLOCK_SIZE - 1);
+        if (candidate < e->start || candidate < 0x100000 ||
+            boot.initrd_size > candidate - e->start)
+            continue;
+        relocated_initrd = (candidate - boot.initrd_size) & ~((u64)PAGE_SIZE - 1);
+        if (relocated_initrd < e->start || relocated_initrd < kernel_end ||
+            relocated_initrd < 0x100000)
+            continue;
+        start = candidate;
         break;
     }
 
@@ -460,6 +472,7 @@ static void *setup_seam_range(u32 size)
     }
 
     e820_add(start, size, E820_RESERVED);
+    SeamLegacyRamLimit = start;
 
     seamrr_base.raw = start | (1 << SEAMRR_CONFIGURE_OFFSET);
     seamrr_mask.raw = size | (1 << SEAMRR_ENABLE_OFFSET);
@@ -467,7 +480,14 @@ static void *setup_seam_range(u32 size)
     wrmsr(MSR_IA32_SEAMRR_PHYS_BASE, seamrr_base.raw);
     wrmsr(MSR_IA32_SEAMRR_PHYS_MASK, seamrr_mask.raw);
 
-    return (void *) start;
+    return (void *)(u32)start;
+}
+
+void
+opentdx_prepboot(void)
+{
+    if (SeamLegacyRamLimit && LegacyRamSize > SeamLegacyRamLimit)
+        LegacyRamSize = SeamLegacyRamLimit;
 }
 
 static void dump_acm_header(npseamldr_t *npseamldr)

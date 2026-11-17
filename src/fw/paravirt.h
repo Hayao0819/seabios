@@ -73,6 +73,12 @@ void qemu_preinit(void);
 void qemu_platform_setup(void);
 void qemu_cfg_init(void);
 
+struct qemu_linux_boot_info {
+    u32 kernel_addr, kernel_size;
+    u32 initrd_addr, initrd_size;
+};
+
+void qemu_get_linux_boot_info(struct qemu_linux_boot_info *info);
 u16 qemu_get_present_cpus_count(void);
 int qemu_cfg_write_file(void *src, struct romfile_s *file, u32 offset, u32 len);
 int qemu_cfg_write_file_simple(void *src, u16 key, u32 offset, u32 len);

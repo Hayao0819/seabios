@@ -343,6 +343,10 @@ qemu_platform_setup(void)
 #define QEMU_CFG_NUMA                   0x0d
 #define QEMU_CFG_BOOT_MENU              0x0e
 #define QEMU_CFG_NB_CPUS                0x05
+#define QEMU_CFG_KERNEL_ADDR            0x07
+#define QEMU_CFG_KERNEL_SIZE            0x08
+#define QEMU_CFG_INITRD_ADDR            0x0a
+#define QEMU_CFG_INITRD_SIZE            0x0b
 #define QEMU_CFG_MAX_CPUS               0x0f
 #define QEMU_CFG_FILE_DIR               0x19
 #define QEMU_CFG_ARCH_LOCAL             0x8000
@@ -429,6 +433,18 @@ qemu_cfg_read_entry(void *buf, int e, int len)
         qemu_cfg_select(e);
         qemu_cfg_read(buf, len);
     }
+}
+
+void
+qemu_get_linux_boot_info(struct qemu_linux_boot_info *info)
+{
+    memset(info, 0, sizeof(*info));
+    if (!qemu_cfg_enabled())
+        return;
+    qemu_cfg_read_entry(&info->kernel_addr, QEMU_CFG_KERNEL_ADDR, 4);
+    qemu_cfg_read_entry(&info->kernel_size, QEMU_CFG_KERNEL_SIZE, 4);
+    qemu_cfg_read_entry(&info->initrd_addr, QEMU_CFG_INITRD_ADDR, 4);
+    qemu_cfg_read_entry(&info->initrd_size, QEMU_CFG_INITRD_SIZE, 4);
 }
 
 static void

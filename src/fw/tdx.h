@@ -233,6 +233,7 @@ typedef struct {
 } seamldr_params_t;
 
 
+void opentdx_prepboot(void);
 __attribute__((used)) void opentdx_setup(void); // Force symbol remains
 
 #endif

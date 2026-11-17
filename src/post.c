@@ -11,6 +11,7 @@
 #include "config.h" // CONFIG_*
 #include "e820map.h" // e820_add
 #include "fw/paravirt.h" // qemu_cfg_preinit
+#include "fw/tdx.h"
 #include "fw/xen.h" // xen_preinit
 #include "hw/pic.h" // pic_setup
 #include "hw/ps2port.h" // ps2port_setup
@@ -170,6 +171,7 @@ prepareboot(void)
     cdrom_prepboot();
     pmm_prepboot();
     malloc_prepboot();
+    opentdx_prepboot();
     e820_prepboot();
 
     HaveRunPost = 2;
